@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carta Gantt trabajo de Seminario de Tesis 2 Magister en Ciencia de Datos</title>
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- D3.js v7 (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <!-- d3-sankey -->
+  <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+  <style>
+    /* Scrollbar suave en panel lateral */
+    .thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .thin-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .thin-scroll::-webkit-scrollbar-track { background: #f8fafc; }
+    /* Cursor para drag */
+    .grabbable { cursor: grab; }
+    .grabbable:active { cursor: grabbing; }
+    /* Tooltip minimalista */
+    .tooltip { position: absolute; pointer-events: none; background: rgba(17, 24, 39, 0.92); color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-[1500px] mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">Carta Gantt trabajo de Seminario de Tesis 2 Magister en Ciencia de Datos</h1>
+      <p class="text-sm text-slate-500 mt-1">Visualización interactiva con D3.js + Tailwind. Zoom/Pan, edición de fechas e hitos, progreso en tiempo real y analíticas auxiliares.</p>
+    </header>
+
+    <section class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <!-- Panel de control -->
+      <aside class="lg:col-span-1 bg-white rounded-2xl shadow p-4 thin-scroll max-h-[80vh] overflow-auto">
+        <h2 class="text-lg font-medium mb-2">Parámetros</h2>
+        <div class="space-y-3 text-sm">
+          <div>
+            <label class="block text-slate-500">Inicio de semestre</label>
+            <input id="semStart" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+          </div>
+          <div>
+            <label class="block text-slate-500">Término de semestre</label>
+            <input id="semEnd" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+          </div>
+          <div>
+            <label class="block text-slate-500">Fecha de hoy (para cálculo de avance)</label>
+            <input id="todayInput" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+          </div>
+          <hr class="my-3" />
+          <h3 class="font-medium">Edición de tareas</h3>
+          <div>
+            <label class="block text-slate-500">Tarea</label>
+            <select id="taskSelect" class="w-full mt-1 rounded-xl border-slate-200"></select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500">Inicio</label>
+              <input id="taskStart" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+            </div>
+            <div>
+              <label class="block text-slate-500">Fin</label>
+              <input id="taskEnd" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-slate-500">Avance (%)</label>
+            <input id="taskProgress" type="number" min="0" max="100" step="1" class="w-full mt-1 rounded-xl border-slate-200" />
+          </div>
+          <div class="flex gap-3">
+            <button id="updateTask" class="mt-2 px-3 py-2 rounded-xl bg-slate-900 text-white">Actualizar tarea</button>
+            <button id="addTask" class="mt-2 px-3 py-2 rounded-xl bg-slate-100 border">Agregar tarea</button>
+          </div>
+          <hr class="my-3" />
+          <h3 class="font-medium">Hitos y reuniones</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500">Entrega 1</label>
+              <input id="milestone1" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+            </div>
+            <div>
+              <label class="block text-slate-500">Entrega 2</label>
+              <input id="milestone2" type="date" class="w-full mt-1 rounded-xl border-slate-200" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-slate-500">Reunión semanal (día de la semana)</label>
+            <select id="weeklyDay" class="w-full mt-1 rounded-xl border-slate-200">
+              <option value="1">Lunes</option>
+              <option value="2">Martes</option>
+              <option value="3">Miércoles</option>
+              <option value="4">Jueves</option>
+              <option value="5">Viernes</option>
+              <option value="6">Sábado</option>
+              <option value="0">Domingo</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500">Hora</label>
+              <input id="weeklyHour" type="time" class="w-full mt-1 rounded-xl border-slate-200" />
+            </div>
+            <div>
+              <label class="block text-slate-500">Grosor de línea</label>
+              <input id="meetingStroke" type="number" min="1" max="12" step="1" class="w-full mt-1 rounded-xl border-slate-200" />
+            </div>
+          </div>
+          <button id="updateMilestones" class="mt-2 px-3 py-2 rounded-xl bg-slate-900 text-white">Actualizar hitos</button>
+          <hr class="my-3" />
+          <h3 class="font-medium">Vista</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <button id="fitView" class="px-3 py-2 rounded-xl bg-slate-100 border">Ajustar vista</button>
+            <button id="resetZoom" class="px-3 py-2 rounded-xl bg-slate-100 border">Reset Zoom</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Lienzo principal: Gantt + overlays -->
+      <main class="lg:col-span-3 space-y-6">
+        <div class="bg-white rounded-2xl shadow p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-medium">Carta Gantt</h2>
+            <div class="text-xs text-slate-500">Zoom/Pan (rueda/arrastre), arrastrar/estirar barras para ajustar fechas.</div>
+          </div>
+          <div id="gantt" class="relative w-full h-[420px] grabbable"></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-white rounded-2xl shadow p-4">
+            <h3 class="text-base font-medium mb-2">Distribución de tiempo por tarea</h3>
+            <div id="pie" class="w-full h-[280px]"></div>
+          </div>
+          <div class="bg-white rounded-2xl shadow p-4">
+            <h3 class="text-base font-medium mb-2">Progreso acumulado (planificado vs real)</h3>
+            <div id="line" class="w-full h-[280px]"></div>
+          </div>
+          <div class="bg-white rounded-2xl shadow p-4">
+            <h3 class="text-base font-medium mb-2">Histograma de duraciones</h3>
+            <div id="hist" class="w-full h-[280px]"></div>
+          </div>
+          <div class="bg-white rounded-2xl shadow p-4">
+            <h3 class="text-base font-medium mb-2">Flujo de trabajo (Sankey)</h3>
+            <div id="sankey" class="w-full h-[280px]"></div>
+          </div>
+        </div>
+      </main>
+    </section>
+  </div>
+
+  <div id="tooltip" class="tooltip hidden"></div>
+
+  <script>
+    // ---------- Utilidades de fechas ----------
+    const fmt = d3.timeFormat('%Y-%m-%d');
+    const parse = (s) => new Date(s);
+    const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+    // ---------- Estado inicial ----------
+    const state = {
+      semesterStart: new Date(2025, 7, 1), // 1 Ago 2025
+      semesterEnd:   new Date(2025, 11, 7), // 7 Dic 2025
+      today:         new Date(2025, 8, 8), // 8 Sep 2025 (usuario)
+      weeklyMeeting: { weekday: 1, hour: '15:00', stroke: 4 }, // Lunes 15:00
+      milestones: {
+        entrega1: new Date(2025, 8, 9),  // 9 Sep 2025
+        entrega2: new Date(2025, 10, 9), // 9 Nov 2025
+      },
+      tasks: [
+        { id: 1, name: 'Consolidación de datos',        start: new Date(2025,7,1),  end: new Date(2025,8,1),  progress: 70 },
+        { id: 2, name: 'Construcción de grafo',         start: new Date(2025,7,15), end: new Date(2025,8,20), progress: 55 },
+        { id: 3, name: 'Análisis de grafo',             start: new Date(2025,8,10), end: new Date(2025,9,20), progress: 20 },
+        { id: 4, name: 'Resolución de pregunta de investigación', start: new Date(2025,9,1), end: new Date(2025,10,10), progress: 0 },
+        { id: 5, name: 'Escritura de tesis',            start: new Date(2025,8,15), end: new Date(2025,11,1), progress: 15 },
+        { id: 6, name: 'Conclusiones',                  start: new Date(2025,10,10), end: new Date(2025,10,30), progress: 0 },
+        { id: 7, name: 'Creación Presentación',         start: new Date(2025,10,20), end: new Date(2025,11,5), progress: 0 },
+      ],
+      nextId: 8,
+    };
+
+    // ---------- Colores (viridis) ----------
+    const colorViridis = (i, n) => d3.interpolateViridis(i / Math.max(1, n - 1));
+
+    // ---------- Inicialización de inputs ----------
+    const semStartEl = document.getElementById('semStart');
+    const semEndEl = document.getElementById('semEnd');
+    const todayEl = document.getElementById('todayInput');
+    const taskSel = document.getElementById('taskSelect');
+    const taskStartEl = document.getElementById('taskStart');
+    const taskEndEl = document.getElementById('taskEnd');
+    const taskProgEl = document.getElementById('taskProgress');
+    const milestone1El = document.getElementById('milestone1');
+    const milestone2El = document.getElementById('milestone2');
+    const weeklyDayEl = document.getElementById('weeklyDay');
+    const weeklyHourEl = document.getElementById('weeklyHour');
+    const meetingStrokeEl = document.getElementById('meetingStroke');
+
+    function populateControls() {
+      semStartEl.value = fmt(state.semesterStart);
+      semEndEl.value = fmt(state.semesterEnd);
+      todayEl.value = fmt(state.today);
+      milestone1El.value = fmt(state.milestones.entrega1);
+      milestone2El.value = fmt(state.milestones.entrega2);
+      weeklyDayEl.value = String(state.weeklyMeeting.weekday);
+      weeklyHourEl.value = state.weeklyMeeting.hour;
+      meetingStrokeEl.value = state.weeklyMeeting.stroke;
+
+      taskSel.innerHTML = '';
+      state.tasks.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = String(t.id);
+        opt.textContent = t.name;
+        taskSel.appendChild(opt);
+      });
+      setTaskFields(state.tasks[0]);
+    }
+
+    function setTaskFields(task) {
+      if (!task) return;
+      taskStartEl.value = fmt(task.start);
+      taskEndEl.value = fmt(task.end);
+      taskProgEl.value = String(task.progress);
+    }
+
+    taskSel.addEventListener('change', (e) => {
+      const t = state.tasks.find(x => String(x.id) === e.target.value);
+      setTaskFields(t);
+    });
+
+    document.getElementById('updateTask').addEventListener('click', () => {
+      const id = Number(taskSel.value);
+      const t = state.tasks.find(x => x.id === id);
+      if (!t) return;
+      t.start = parse(taskStartEl.value);
+      t.end = parse(taskEndEl.value);
+      t.progress = clamp(Number(taskProgEl.value), 0, 100);
+      renderAll();
+    });
+
+    document.getElementById('addTask').addEventListener('click', () => {
+      const name = prompt('Nombre de la nueva tarea');
+      if (!name) return;
+      const start = parse(taskStartEl.value);
+      const end = parse(taskEndEl.value);
+      const progress = clamp(Number(taskProgEl.value) || 0, 0, 100);
+      state.tasks.push({ id: state.nextId++, name, start, end, progress });
+      populateControls();
+      renderAll();
+    });
+
+    document.getElementById('updateMilestones').addEventListener('click', () => {
+      state.semesterStart = parse(semStartEl.value);
+      state.semesterEnd = parse(semEndEl.value);
+      state.today = parse(todayEl.value);
+      state.milestones.entrega1 = parse(milestone1El.value);
+      state.milestones.entrega2 = parse(milestone2El.value);
+      state.weeklyMeeting.weekday = Number(weeklyDayEl.value);
+      state.weeklyMeeting.hour = weeklyHourEl.value;
+      state.weeklyMeeting.stroke = Number(meetingStrokeEl.value);
+      renderAll();
+    });
+
+    // ---------- Gantt ----------
+    const ganttDiv = d3.select('#gantt');
+    const margin = { top: 30, right: 20, bottom: 30, left: 200 };
+
+    const svg = ganttDiv.append('svg').attr('width', '100%').attr('height', '100%');
+    const root = svg.append('g');
+    const gridLayer = root.append('g');
+    const barsLayer = root.append('g');
+    const progressLayer = root.append('g');
+    const axesLayer = root.append('g');
+    const overlaysLayer = root.append('g');
+
+    const x = d3.scaleTime();
+    const y = d3.scaleBand().padding(0.25);
+
+    let zoomBehavior = d3.zoom().scaleExtent([0.5, 20]).on('zoom', ({ transform }) => {
+      currentTransform = transform;
+      render();
+    });
+    svg.call(zoomBehavior);
+    let currentTransform = d3.zoomIdentity;
+
+    const dragBar = d3.drag()
+      .on('start', function(event, d){ d3.select(this).classed('opacity-80', true); })
+      .on('drag', function(event, d){
+        const invx = currentTransform.rescaleX(x);
+        const dxDate = invx(event.dx) - invx(0);
+        d.start = new Date(d.start.getTime() + dxDate);
+        d.end = new Date(d.end.getTime() + dxDate);
+        render();
+      })
+      .on('end', function(){ d3.select(this).classed('opacity-80', false); renderAll(); });
+
+    const dragResizeL = d3.drag()
+      .on('drag', function(event, d){
+        const invx = currentTransform.rescaleX(x);
+        const dxDate = invx(event.dx) - invx(0);
+        d.start = new Date(d.start.getTime() + dxDate);
+        render();
+      })
+      .on('end', function(){ renderAll(); });
+
+    const dragResizeR = d3.drag()
+      .on('drag', function(event, d){
+        const invx = currentTransform.rescaleX(x);
+        const dxDate = invx(event.dx) - invx(0);
+        d.end = new Date(d.end.getTime() + dxDate);
+        render();
+      })
+      .on('end', function(){ renderAll(); });
+
+    function computeMeetings() {
+      const meetings = [];
+      const start = new Date(state.semesterStart);
+      // normalizar a el primer día de semana seleccionado
+      const day = state.weeklyMeeting.weekday; // 0..6
+      const startDow = start.getDay();
+      const delta = (day - startDow + 7) % 7;
+      let cur = new Date(start.getFullYear(), start.getMonth(), start.getDate() + delta);
+      const [h, m] = state.weeklyMeeting.hour.split(':').map(Number);
+      while (cur <= state.semesterEnd) {
+        const d = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), h, m);
+        meetings.push(d);
+        cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 7);
+      }
+      return meetings;
+    }
+
+    function layout() {
+      const { width, height } = ganttDiv.node().getBoundingClientRect();
+      svg.attr('width', width).attr('height', height);
+      x.range([margin.left, width - margin.right]).domain([state.semesterStart, state.semesterEnd]);
+      y.range([margin.top, height - margin.bottom]).domain(state.tasks.map(d => d.name));
+    }
+
+    function renderAxes() {
+      const xAxis = d3.axisBottom(currentTransform.rescaleX(x)).ticks(8).tickSizeOuter(0);
+      const yAxis = d3.axisLeft(y).tickSizeOuter(0);
+
+      axesLayer.selectAll('.x-axis').data([0]).join('g')
+        .attr('class', 'x-axis')
+        .attr('transform', `translate(0,${ganttDiv.node().getBoundingClientRect().height - margin.bottom})`)
+        .call(xAxis);
+
+      axesLayer.selectAll('.y-axis').data([0]).join('g')
+        .attr('class', 'y-axis')
+        .attr('transform', `translate(${margin.left},0)`)
+        .call(yAxis);
+    }
+
+    function renderGrid() {
+      const { height } = ganttDiv.node().getBoundingClientRect();
+      const xt = currentTransform.rescaleX(x);
+      const ticks = xt.ticks(16);
+      const lines = gridLayer.selectAll('line.grid').data(ticks, d => d);
+      lines.join(
+        enter => enter.append('line').attr('class', 'grid')
+          .attr('y1', margin.top).attr('y2', height - margin.bottom)
+          .attr('stroke', '#e2e8f0').attr('stroke-width', 1)
+          .attr('x1', d => xt(d)).attr('x2', d => xt(d)),
+        update => update.attr('x1', d => xt(d)).attr('x2', d => xt(d)),
+        exit => exit.remove()
+      );
+    }
+
+    function renderBars() {
+      const xt = currentTransform.rescaleX(x);
+      // barras principales
+      const g = barsLayer.selectAll('g.task').data(state.tasks, d => d.id);
+      const gEnter = g.enter().append('g').attr('class', 'task');
+
+      gEnter.append('rect').attr('class', 'bar').attr('rx', 10).attr('ry', 10).call(dragBar);
+      gEnter.append('rect').attr('class', 'resizeL').attr('width', 6).attr('rx', 3).call(dragResizeL);
+      gEnter.append('rect').attr('class', 'resizeR').attr('width', 6).attr('rx', 3).call(dragResizeR);
+      gEnter.append('text').attr('class', 'label').attr('dy', '0.32em').attr('font-size', 12);
+
+      const gAll = gEnter.merge(g);
+
+      gAll.select('rect.bar')
+        .attr('fill', (d,i) => colorViridis(i, state.tasks.length))
+        .attr('y', d => y(d.name))
+        .attr('x', d => xt(d.start))
+        .attr('height', y.bandwidth())
+        .attr('width', d => Math.max(2, xt(d.end) - xt(d.start)));
+
+      gAll.select('rect.resizeL')
+        .attr('fill', '#0f172a')
+        .attr('y', d => y(d.name))
+        .attr('x', d => xt(d.start) - 3)
+        .attr('height', y.bandwidth());
+
+      gAll.select('rect.resizeR')
+        .attr('fill', '#0f172a')
+        .attr('y', d => y(d.name))
+        .attr('x', d => xt(d.end) - 3)
+        .attr('height', y.bandwidth());
+
+      gAll.select('text.label')
+        .text(d => `${d.name}`)
+        .attr('x', d => xt(d.start) + 8)
+        .attr('y', d => y(d.name) + y.bandwidth()/2)
+        .attr('fill', '#0f172a');
+
+      g.exit().remove();
+
+      // barra de progreso interna
+      const prog = progressLayer.selectAll('rect.progress').data(state.tasks, d => d.id);
+      prog.join('rect')
+        .attr('class', 'progress')
+        .attr('y', d => y(d.name) + y.bandwidth()*0.25)
+        .attr('x', d => xt(d.start))
+        .attr('height', y.bandwidth()*0.5)
+        .attr('width', d => Math.max(0, (xt(d.start) + (xt(d.end)-xt(d.start))*d.progress/100) - xt(d.start)))
+        .attr('fill', '#0f172a33');
+    }
+
+    function renderOverlays() {
+      const xt = currentTransform.rescaleX(x);
+      const { height } = ganttDiv.node().getBoundingClientRect();
+
+      // Hoy
+      overlaysLayer.selectAll('line.today').data([state.today]).join('line')
+        .attr('class', 'today')
+        .attr('x1', d => xt(d)).attr('x2', d => xt(d))
+        .attr('y1', margin.top).attr('y2', height - margin.bottom)
+        .attr('stroke', '#0ea5e9').attr('stroke-width', 2).attr('stroke-dasharray', '4 4');
+
+      // Entregas (más notorias)
+      const entregas = [
+        { date: state.milestones.entrega1, label: 'Entrega avances 1' },
+        { date: state.milestones.entrega2, label: 'Entrega avances 2' },
+      ];
+      const e = overlaysLayer.selectAll('g.entrega').data(entregas);
+      const eEnter = e.enter().append('g').attr('class', 'entrega');
+      eEnter.append('line');
+      eEnter.append('text');
+      eEnter.merge(e).select('line')
+        .attr('x1', d => xt(d.date)).attr('x2', d => xt(d.date))
+        .attr('y1', margin.top).attr('y2', height - margin.bottom)
+        .attr('stroke', '#dc2626').attr('stroke-width', 6).attr('stroke-opacity', 0.6);
+      eEnter.merge(e).select('text')
+        .text(d => `${d.label} (${fmt(d.date)})`)
+        .attr('x', d => xt(d.date) + 6)
+        .attr('y', margin.top - 10)
+        .attr('fill', '#dc2626')
+        .attr('font-size', 12);
+      e.exit().remove();
+
+      // Reuniones semanales (líneas gruesas)
+      const meetings = computeMeetings();
+      const m = overlaysLayer.selectAll('line.meeting').data(meetings, d => +d);
+      m.join('line')
+        .attr('class', 'meeting')
+        .attr('x1', d => xt(d)).attr('x2', d => xt(d))
+        .attr('y1', margin.top).attr('y2', height - margin.bottom)
+        .attr('stroke', '#16a34a').attr('stroke-width', state.weeklyMeeting.stroke).attr('stroke-opacity', 0.35);
+    }
+
+    function render() {
+      layout();
+      renderAxes();
+      renderGrid();
+      renderBars();
+      renderOverlays();
+    }
+
+    function fitViewToSemester() {
+      svg.transition().duration(400).call(zoomBehavior.transform, d3.zoomIdentity);
+    }
+
+    document.getElementById('fitView').addEventListener('click', fitViewToSemester);
+    document.getElementById('resetZoom').addEventListener('click', () => svg.call(zoomBehavior.transform, d3.zoomIdentity));
+
+    function renderAll() {
+      render();
+      renderAnalytics();
+      populateControls();
+    }
+
+    // ---------- Analíticas (pie, line, hist, sankey) ----------
+    function clearAndMakeSVG(sel) {
+      const el = d3.select(sel);
+      el.selectAll('*').remove();
+      const { width, height } = el.node().getBoundingClientRect();
+      return el.append('svg').attr('width', width).attr('height', height);
+    }
+
+    function taskDurationDays(t) {
+      return Math.max(1, Math.round((t.end - t.start) / (1000*60*60*24)));
+    }
+
+    function renderPie() {
+      const svg = clearAndMakeSVG('#pie');
+      const { width, height } = svg.node().getBoundingClientRect();
+      const r = Math.min(width, height) / 2 - 6;
+      const g = svg.append('g').attr('transform', `translate(${width/2},${height/2})`);
+      const pie = d3.pie().value(d => taskDurationDays(d))(state.tasks);
+      const arc = d3.arc().innerRadius(r*0.5).outerRadius(r);
+      g.selectAll('path').data(pie).join('path')
+        .attr('d', arc)
+        .attr('fill', (d,i) => colorViridis(i, pie.length))
+        .attr('stroke', 'white').attr('stroke-width', 1);
+      g.selectAll('text').data(pie).join('text')
+        .attr('transform', d => `translate(${arc.centroid(d)})`)
+        .attr('text-anchor', 'middle').attr('font-size', 10)
+        .text(d => d.data.name.split(' ')[0]);
+    }
+
+    function renderLine() {
+      const svg = clearAndMakeSVG('#line');
+      const { width, height } = svg.node().getBoundingClientRect();
+      const m = { t: 10, r: 10, b: 24, l: 36 };
+      const innerW = width - m.l - m.r;
+      const innerH = height - m.t - m.b;
+      const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
+
+      // Línea de tiempo general
+      const xmin = state.semesterStart, xmax = state.semesterEnd;
+      const xt = d3.scaleTime().domain([xmin, xmax]).range([0, innerW]);
+      const yt = d3.scaleLinear().domain([0, 100]).nice().range([innerH, 0]);
+
+      // Progreso planificado: asumimos lineal por tarea sobre su intervalo
+      const days = d3.timeDay.count(xmin, xmax) + 1;
+      const seriesPlanned = d3.range(days).map(i => {
+        const d = d3.timeDay.offset(xmin, i);
+        // avance planificado proporcional al tiempo transcurrido por tarea
+        const planned = d3.mean(state.tasks, t => {
+          const total = taskDurationDays(t);
+          if (d < t.start) return 0;
+          if (d > t.end) return 100;
+          const frac = (d - t.start) / (t.end - t.start);
+          return frac * 100;
+        });
+        return { date: d, value: planned };
+      });
+
+      // Progreso real: promedio del % de avance declarado
+      const avgReal = d3.mean(state.tasks, t => t.progress);
+      const todayIdx = clamp(d3.timeDay.count(xmin, state.today), 0, days-1);
+      const seriesReal = seriesPlanned.map((p, i) => ({ date: p.date, value: i <= todayIdx ? avgReal : null }));
+
+      const line = d3.line().defined(d => d.value != null).x(d => xt(d.date)).y(d => yt(d.value));
+
+      g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(xt).ticks(6));
+      g.append('g').call(d3.axisLeft(yt).ticks(5).tickFormat(d => d + '%'));
+
+      g.append('path').datum(seriesPlanned).attr('fill', 'none').attr('stroke', d3.interpolateViridis(0.8)).attr('stroke-width', 2).attr('d', line);
+      g.append('path').datum(seriesReal).attr('fill', 'none').attr('stroke', d3.interpolateViridis(0.2)).attr('stroke-width', 2).attr('stroke-dasharray', '4 4').attr('d', line);
+    }
+
+    function renderHist() {
+      const svg = clearAndMakeSVG('#hist');
+      const { width, height } = svg.node().getBoundingClientRect();
+      const m = { t: 10, r: 10, b: 24, l: 36 };
+      const innerW = width - m.l - m.r;
+      const innerH = height - m.t - m.b;
+      const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
+      const values = state.tasks.map(taskDurationDays);
+      const xh = d3.scaleLinear().domain([0, d3.max(values) || 1]).nice().range([0, innerW]);
+      const bins = d3.bin().domain(xh.domain()).thresholds(6)(values);
+      const yh = d3.scaleLinear().domain([0, d3.max(bins, d => d.length) || 1]).nice().range([innerH, 0]);
+      g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(xh));
+      g.append('g').call(d3.axisLeft(yh).ticks(5));
+      g.selectAll('rect').data(bins).join('rect')
+        .attr('x', d => xh(d.x0) + 1)
+        .attr('y', d => yh(d.length))
+        .attr('width', d => Math.max(0, xh(d.x1) - xh(d.x0) - 2))
+        .attr('height', d => innerH - yh(d.length))
+        .attr('fill', d3.interpolateViridis(0.55));
+    }
+
+    function renderSankey() {
+      const svg = clearAndMakeSVG('#sankey');
+      const { width, height } = svg.node().getBoundingClientRect();
+      const sankey = d3.sankey().nodeWidth(12).nodePadding(14).extent([[1,1],[width-1,height-1]]);
+
+      // Construcción de un flujo simple siguiendo el pipeline lógico entre tareas principales
+      const order = [
+        'Consolidación de datos',
+        'Construcción de grafo',
+        'Análisis de grafo',
+        'Resolución de pregunta de investigación',
+        'Escritura de tesis',
+        'Conclusiones',
+        'Creación Presentación',
+      ];
+
+      const nodes = order.map(name => ({ name }));
+      const nameToIndex = new Map(nodes.map((n,i)=>[n.name,i]));
+      const links = d3.pairs(order).map(([s,t]) => ({
+        source: nameToIndex.get(s),
+        target: nameToIndex.get(t),
+        value: 1
+      }));
+
+      const graph = sankey({ nodes: nodes.map(d => ({...d})), links: links.map(d => ({...d})) });
+
+      svg.append('g').selectAll('path').data(graph.links).join('path')
+        .attr('d', d3.sankeyLinkHorizontal())
+        .attr('fill', 'none').attr('stroke', d3.interpolateViridis(0.65)).attr('stroke-opacity', 0.5)
+        .attr('stroke-width', d => Math.max(1, d.width));
+
+      const g = svg.append('g').selectAll('g').data(graph.nodes).join('g');
+      g.append('rect')
+        .attr('x', d => d.x0).attr('y', d => d.y0)
+        .attr('width', d => d.x1 - d.x0).attr('height', d => Math.max(1, d.y1 - d.y0))
+        .attr('fill', (d,i) => d3.interpolateViridis(i/(graph.nodes.length-1)))
+        .append('title').text(d => d.name);
+
+      g.append('text')
+        .attr('x', d => d.x0 - 6).attr('y', d => (d.y1 + d.y0)/2)
+        .attr('dy', '0.35em').attr('text-anchor', 'end')
+        .text(d => d.name)
+        .filter(d => d.x0 < width / 2)
+        .attr('x', d => d.x1 + 6).attr('text-anchor', 'start');
+    }
+
+    function renderAnalytics() {
+      renderPie();
+      renderLine();
+      renderHist();
+      renderSankey();
+    }
+
+    // ---------- Tooltips básicos ----------
+    const tip = d3.select('#tooltip');
+    function showTip(html, x, y) {
+      tip.html(html).style('left', `${x+12}px`).style('top', `${y+12}px`).classed('hidden', false);
+    }
+    function hideTip(){ tip.classed('hidden', true); }
+
+    // Eventos de tooltip para barras
+    barsLayer.on('mousemove', (event) => {
+      const [mx, my] = d3.pointer(event);
+      const invx = currentTransform.rescaleX(x);
+      // detectar tarea aproximada
+      const yVal = y.invert ? y.invert(my) : null;
+      const t = state.tasks.find(tt => my >= y(tt.name) && my <= y(tt.name)+y.bandwidth());
+      if (t) {
+        showTip(`<b>${t.name}</b><br/>${fmt(t.start)} → ${fmt(t.end)}<br/>Duración: ${taskDurationDays(t)} días<br/>Avance: ${t.progress}%`, event.pageX, event.pageY);
+      }
+    }).on('mouseleave', hideTip);
+
+    // ---------- Primera renderización ----------
+    populateControls();
+    renderAll();
+    fitViewToSemester();
+
+    // Redimensionamiento responsivo
+    window.addEventListener('resize', () => { renderAll(); });
+  </script>
+</body>
+</html>
